@@ -1,0 +1,487 @@
+\documentclass{article}
+\usepackage{CJKutf8}
+\usepackage{minted}
+\usepackage{geometry}
+\geometry{a4paper,centering,scale=0.8}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{float}
+%可能用到的包
+\title{改善深层神经网络-算法总结}
+\author{赵燕}
+\date{}
+\begin{document} 
+\hfuzz=\maxdimen
+\tolerance=10000
+\hbadness=10000
+\begin{CJK}{UTF8}{gbsn} 
+\maketitle
+\renewcommand\contentsname{目录}
+\renewcommand\figurename{图}
+\tableofcontents
+\newpage
+
+\section{Practical aspects of Deep Learning}
+\subsection{Initialization}
+\subparagraph{}
+一个好的初始化可以加快梯度下降的收敛，同时能够以较大几率使得梯度下降收敛到较低的训练和泛化误差。
+\subparagraph{}
+使用一个三层的神经网络去实现初始化，共有三种方法：
+\subparagraph{}
+1.全零初始化（Zero Initialization）
+\subparagraph{}
+2.随机初始化（Random Initialization）
+\subparagraph{}
+3.He初始化（He Initialization）
+\subparagraph{}
+Initialize parameters dictionary:
+   \begin{minted}{python}
+   if initialization == "zeros":
+       parameters=initialize_parameters_zeros(layers_dims)
+   elif initialization == "random":
+       parameters=initialize_parameters_random(layers_dims)
+   elif initialization == "he":
+       parameters=initialize_parameters_he(layers_dims)
+   \end{minted}
+\subsubsection{Zero Initialization}
+\subparagraph{}
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{11.png}}
+\label{fig:11}
+\caption{全零初始化}
+\end{figure}
+\begin{figure}[H]
+\center{\includegraphics[width=.4\textwidth]{13.png}}
+\label{fig:13}
+\caption{全零初始化代价函数曲线}
+\end{figure}
+\subparagraph{}
+全零初始化的效果很差，整个迭代过程中损失函数并不会下降，保持一条直线的状态，这个参数下的模型，不管是对于训练集还是测试集，预测结果都为0。
+\subparagraph{}
+通常，将所有权重初始化为零会导致网络不能破坏对称性。这意味着每一层的每个神经元都会学习同样的东西，你也可以训练一个神经网络，每个层都有$n^{[l]}=1$，那神经网络的性能就如线性分类器，比如说逻辑回归。
+\subparagraph{}
+对于参数$W^{[l]}$，我们用进行随机初始化，以打破神经网络的对称性。对于参数$b^{[l]}$是可以初始化为0的。
+\subsubsection{Random Initialization}
+\subparagraph{}
+为了打破对称，使用随机初始化权重。随机初始化后，每个神经元然后可以继续学习其输入的不同功能。
+\subparagraph{}
+Use np.random.randn(..,..) * 10 for weights and np.zeros((.., ..)) for biases.
+\subparagraph{}
+We are using a fixed np.random.seed(..) to make sure your "random" weights match ours, so don't worry if running several times your code gives you always the same initial values for the parameters. 
+\subparagraph{}
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{12.png}}
+\label{fig:12}
+\caption{随机初始化}
+\end{figure}
+\begin{figure}[H]
+\center{\includegraphics[width=.4\textwidth]{14.png}}
+\label{fig:14}
+\caption{随机初始化代价函数曲线}
+\end{figure}
+\subparagraph{}
+一开始的代价函数很大,这是由于采用的随机初始化的权重矩阵值较大,导致有些样本对于激活函数(sigmoid,输出层)输出结果值很靠近 0 或者 1。当输出的结果值不同于真实值,其代价很大,比如 log($a^{[3]}$)=log(0),代价是无穷大的。
+\subparagraph{}
+过大或者过小的权重矩阵将导致梯度爆炸或梯度消失,这都会减缓优化算法获取最优结果的速度。因此需要控制随机化的权重矩阵大小。
+\subparagraph{}
+如果更长时间的训练网络，将会看到更好的结果，但是用过大的随机数进行初始化会降低优化速度。
+\subparagraph{}
+总结：将权重初始化为非常大的随机值无效，所以要用小的随机值进行初始化。
+\subsubsection{He Initialization}
+\subparagraph{}
+He初始化方式是对随机初始化的权重矩阵乘以$sqrt(2./layers_dims[l-1])$;Xavier方式初始化是对权重矩阵乘以$sqrt(1./layers_dims[l-1])$。
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{15.png}}
+\label{fig:15}
+\caption{He初始化}
+\end{figure}
+\begin{figure}[H]
+\center{\includegraphics[width=.4\textwidth]{16.png}}
+\label{fig:16}
+\caption{He初始化代价函数曲线}
+\end{figure}
+\subparagraph{}
+You have seen three different types of initializations. For the same number of iterations and same hyperparameters the comparison is:
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{17.png}}
+\label{fig:17}
+\caption{初始化方式总结}
+\end{figure}
+\subsection{Regularization}
+不使用正则化会有明显的过拟合现象，为了避免过度拟合现象，引入了两种正则化技术：
+\subparagraph{}
+\begin{itemize}
+\item $L_2$ regularization
+\subparagraph{}
+参数: $\lambda$ ，在Python中lambda是保留字，所以此时的 $\lambda$ 写作："lambd"
+\subparagraph{}
+函数: "compute\_{}cost\_{}with\_{}regularization()" 和 "backward\_{}propagation\_{}with\_{}regularization()"
+\item Dropout regularization 
+\subparagraph{}
+参数:设置keep\_{}prob值，作为神经元结点的概率。
+\subparagraph{}
+函数："forward\_{}propagation\_{}with\_{}dropout()" and "backward\_{}propagation\_{}with\_{}dropout()"
+\end{itemize}
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{20.png}}
+\label{fig:20}
+\caption{正则化函数}
+\end{figure}
+\subsubsection{$L_2$ Regularization}
+公式：
+\begin{equation}
+J=-\frac{1}{m}\sum_{i=1}^m(y^{(i)}log(a^{[L](i)})+(1-y^{(i)})log(1-a^{[L](i)}))
+\end{equation}
+\begin{equation}
+J_{regularized}=\underbrace{-\frac{1}{m}\sum_{i=1}^m(y^{(i)}log(a^{[L](i)})+(1-y^{(i)})log(1-a^{[L](i)}))}_\text{corss-entropy cost}+\underbrace{\frac{1}{m}\frac{\lambda}{2}\sum_l\sum_k\sum_jW_{k,j}^{[l](2)}}_\text{$L_2$ regularization cost}
+\end{equation}
+\subparagraph{}
+首先定义函数compute\_{}cost\_{}with\_{}regularization()，表示公式（2）的代价函数。
+\subparagraph{}
+$\sum\limits_k\sum\limits_j W_{k,j}^{[l]2}$的计算,采用:np.sum(np.square(Wl))
+\subparagraph{}
+Note that you have to do this for $W^{[1]}$, $W^{[2]}$ and $W^{[3]}$, then sum the three terms and multiply by $\frac{1}{m}\frac{1}{2}$.
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{21.png}}
+\label{fig:21}
+\caption{$L_2$正则化}
+\end{figure}
+\subparagraph{}
+由于代价函数改变了，所以同样需要修改后向传播算法，，则需要计算dW1, dW2 and dW3. 添加梯度下降的正则化项：($\frac{d}{dW} ( \frac{1}{2}\frac{\lambda}{m}  W^2) = \frac{\lambda}{m} W$).
+\subparagraph{}
+设置$\lambda$的值等于0.7时：
+    \begin{minted}{python}
+     parameters = model(train_X,train_Y, lambd = 0.7)
+    \end{minted}
+\subparagraph{}
+\begin{itemize}
+\item The value of $\lambda$ is a hyperparameter that you can tune using a dev set.
+\item L2 regularization makes your decision boundary smoother. If $\lambda$ is too large, it is also possible to "oversmooth", resulting in a model with high bias.
+\end{itemize}
+\subparagraph{}
+L2-regularization relies on the assumption that a model with small weights is simpler than a model with large weights. Thus, by penalizing the square values of the weights in the cost function you drive all the weights to smaller values. It becomes too costly for the cost to have large weights! This leads to a smoother model in which the output changes more slowly as the input changes.
+\subsubsection{Dropout Regularization}
+\subparagraph{}
+Dropout正则化会遍历网络的每一层，并设置消除神经网络中节点的概率，消除一些节点，删除从该节点进出的连线，节点更少，则变成了规模更小的网络，然后用backprop方法进行训练，注意Dropout正则化仅仅适用于训练集！
+\subparagraph{}
+前向传播算法：
+\subparagraph{}
+You would like to shut down some neurons in the first and second layers. To do that, you are going to carry out 4 Steps:
+\subparagraph{}
+1. $d^{[1]}$ 与 $a^{[1]}$ 维度相同，使用 `np.random.rand()`进行初始化，同样随机初始化矩阵 $D^{[1]} = [d^{[1](1)} d^{[1](2)} ... d^{[1](m)}] $，和初始化 $A^{[1]}$的式一样。
+\subparagraph{}
+2. Set each entry of $D^{[1]}$ to be 0 with probability (1-keep\_{}prob) or 1 with probability (keep\_{}prob), by thresholding values in $D^{[1]}$ appropriately.
+\subparagraph{}
+Hint: to set all the entries of a matrix X to 0 (if entry is less than 0.5) or 1 (if entry is more than 0.5) you would do: `X = (X $<$ 0.5)`. Note that 0 and 1 are respectively equivalent to False and True.
+\subparagraph{}
+3.$A^{[1]}$=$A^{[1]} * D^{[1]}$. 
+\subparagraph{}
+4. $A^{[1]}$/keep\_{}prob.(inverted dropout.)
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{23.png}}
+\label{fig:23}
+\caption{Dropout正则化前向传播算法}
+\end{figure}
+\subparagraph{}
+后向传播算法：
+\subparagraph{}
+分两步：
+\subparagraph{}
+1.前向传播过程中 `A1`用到的$D^{[1]}$,在后向传播过程将$D^{[1]}$ 应用到dA1即可。 
+\subparagraph{}
+2.前向传播过程将 A1 除以 keep\_{}prob ,以保持期望值。在后向传播过程 dA1 也做如此操作,即 dA1/keep\_{}prob 。这是由于$A^{[1]}$被 keep\_{}prob 进行一定程度的放大,则其导数$dA^{[1]}$ 也需要做同比例的操作。
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{24.png}}
+\label{fig:24}
+\caption{Dropout正则化前向传播算法}
+\end{figure}
+\subparagraph{}
+注意：Dropout正则化仅仅用于训练集！！！
+\subparagraph{}
+总结:
+\begin{figure}[H]
+\center{\includegraphics[width=.4\textwidth]{25.png}}
+\label{fig:25}
+\caption{正则化方式对比}
+\end{figure}
+\subsection{Gradient Checking}
+\subparagraph{}
+在神经网络计算过程中,对后向传播的梯度要进行校验,确保其计算无误。前向传播一般相对简单不会出错,所以在前向传播的基础上利用计算出来的代价J我们可以进行后向梯度的校验。
+\subparagraph{}
+定义：
+\begin{equation}
+\frac{\partial J}{\partial \theta} = \lim_{\varepsilon \to 0} \frac{J(\theta + \varepsilon) - J(\theta - \varepsilon)}{2 \varepsilon} \tag{1}
+\end{equation}
+\begin{itemize}
+\item 计算$\frac{\partial J}{\partial \theta}$ 
+\item 计算$J(\theta + \varepsilon)$ and $J(\theta - \varepsilon)$ 
+\end{itemize}
+\subsubsection{1-dimensional gradient checking}
+\subparagraph{}
+（1）计算梯度近似值：
+\subparagraph{}
+    1. $\theta^{+} = \theta + \varepsilon$
+\subparagraph{}
+    2. $\theta^{-} = \theta - \varepsilon$
+\subparagraph{}
+    3. $J^{+} = J(\theta^{+})$
+\subparagraph{}
+    4. $J^{-} = J(\theta^{-})$
+\subparagraph{}
+    5. $gradapprox = \frac{J^{+} - J^{-}}{2  \varepsilon}$
+\subparagraph{}
+（2）计算梯度grad
+\subparagraph{}
+（3）计算difference:
+\begin{equation}
+difference = \frac {\mid\mid grad - gradapprox \mid\mid_2}{\mid\mid grad \mid\mid_2 + \mid\mid gradapprox \mid\mid_2} \tag{2}
+\end{equation}
+\subparagraph{}
+计算公式:
+\subparagraph{}
+1.计算分子：np.linalg.norm(...)(范数)
+\subparagraph{}
+2.计算分母：np.linalg.norm(...) twice.
+\subparagraph{}
+3.相除
+\subparagraph{}
+当difference足够小（$<10^{-7}$），则视为通过梯度校验。
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{30.png}}
+\label{fig:30}
+\caption{梯度检验}
+\end{figure}
+\subsubsection{N-dimensional gradient checking}
+\begin{figure}[H]
+\center{\includegraphics[width=.4\textwidth]{31.png}}
+\label{fig:31}
+\caption{三层神经网络前向和后向}
+\end{figure}
+\subparagraph{}
+前向传播算法：
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{32.png}}
+\label{fig:32}
+\caption{前向传播算法}
+\end{figure}
+\subparagraph{}
+后向传播算法：
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{33.png}}
+\label{fig:33}
+\caption{后向传播算法}
+\end{figure}
+\subparagraph{}
+N维梯度检验：
+\subparagraph{}
+For each i in num\_{}parameters:
+\begin{itemize}
+\item To compute `J\_{}plus[i]`:
+\subparagraph{}
+1. Set $\theta^{+}$ to `np.copy(parameters\_{}values)`
+\subparagraph{}
+ 2. Set $\theta^{+}_i$ to $\theta^{+}_i + \varepsilon$
+\subparagraph{}
+3. Calculate $J^{+}_i$ using to `forward\_{}propagation\_{}n(x, y, vector\_{}to\_{}dictionary(`$\theta^{+}$ `))`. 
+\item To compute `J\_{}minus[i]`: do the same thing with $\theta^{-}$
+\item Compute $gradapprox[i] = \frac{J^{+}_i - J^{-}_i}{2 \varepsilon}$
+\end{itemize}
+\subparagraph{}
+然后再计算difference
+\begin{figure}[H]
+\center{\includegraphics[width=.7\textwidth]{35.png}}
+\label{fig:35}
+\caption{梯度检验}
+\end{figure}
+\subparagraph{}
+注意：如果修改代码，则需要重新执行定义backward\_{}propagation\_{}n（）的单元格。
+\subparagraph{}
+梯度检验很慢，所以我们不会在训练期间每一次都运行梯度检验，只是几次检查梯度即可。
+\section{Optimization algorithms}
+\subsection{Optimization}
+\subsubsection{Gradient Descent}
+\subparagraph{}
+梯度下降是每次处理完m个样本后对参数进行一次更新操作,也叫做 Batch Gradient Descent。对
+于L层模型,梯度下降法对于各层参数的更新:l=1,...L。
+\begin{equation}
+W^{[l]} = W^{[l]} - \alpha \text{ } dW^{[l]} \tag{1}
+\end{equation}
+\begin{equation}
+b^{[l]} = b^{[l]} - \alpha \text{ } db^{[l]} \tag{2}
+\end{equation}
+\begin{figure}[H]
+\center{\includegraphics[width=.7\textwidth]{37.png}}
+\label{fig:37}
+\caption{梯度下降算法}
+\end{figure}
+\subparagraph{}
+批次梯度下降和随机梯度下降的区别：
+\begin{itemize}
+\item (Batch) Gradient Descent:
+\begin{minted}{python}
+X = data_input
+Y = labels
+parameters = initialize_parameters(layers_dims)
+for i in range(0, num_iterations):
+    # Forward propagation
+    a, caches = forward_propagation(X, parameters)
+    # Compute cost.
+    cost = compute_cost(a, Y)
+    # Backward propagation.
+    grads = backward_propagation(a, caches, parameters)
+    # Update parameters.
+    parameters = update_parameters(parameters, grads)
+\end{minted}
+\item Stochastic Gradient Descent:
+\begin{minted}{python}
+X = data_input
+Y = labels
+parameters = initialize_parameters(layers_dims)
+for i in range(0, num_iterations):
+    for j in range(0, m):
+        # Forward propagation
+        a, caches = forward_propagation(X[:,j], parameters)
+        # Compute cost
+        cost = compute_cost(a, Y[:,j])
+        # Backward propagation
+        grads = backward_propagation(a, caches, parameters)
+        # Update parameters.
+        parameters = update_parameters(parameters, grads)
+\end{minted}
+\end{itemize}
+\subparagraph{}
+Stochastic Gradient Descent (SGD) 随机梯度下降法。等同于 mini-batch 中每个 mini-batch 只有一个样本的梯度下降法。此时,梯度下降的更新法则就变成每个样本都要计算一次,而不是此前的对整个样本集计算一次。
+\subparagraph{}
+实现随机梯度下降需要三个循环：
+\begin{itemize}
+\item 最外层的迭代次数
+\item m个训练样本
+\item 每一层参数的更新，from $(W^{[1]},b^{[1]})$ to $(W^{[L]},b^{[L]})$
+\end{itemize}
+\subparagraph{}
+Remember:
+\begin{itemize}
+\item The difference between gradient descent, mini-batch gradient descent and stochastic gradient descent is the number of examples you use to perform one update step.
+\item You have to tune a learning rate hyperparameter $\alpha$.
+\item With a well-turned mini-batch size, usually it outperforms either gradient descent or stochastic gradient descent (particularly when the training set is large).
+\end{itemize}
+\subsubsection{Mini-Batch Gradient Descent}
+\subparagraph{}
+随机播放：创建一个洗牌版本的训练集（X，Y），如下所示。 X和Y的每列表示训练示例,X和Y之间的随机混洗是同步进行的。这样，在混洗后，X的第i列就是Y中的第i个标签对应的例子。洗牌步骤确保了这些例子将被随机分解成不同的小批量。
+\begin{figure}[H]
+\center{\includegraphics[width=.5\textwidth]{41.png}}
+\label{fig:41}
+\caption{mini\_{}batch}
+\end{figure}
+\subparagraph{}
+分区：将洗牌（X，Y）分成mini\_{}batch\_{}size（这里64）的小批量。 请注意，训练示例的数量并不总是被mini\_{}batch\_{}size整除。 最后一个小批量可能会更小，但不需要担心这一点。当最终的mini\_{}batch小于完整的mini\_{}batch\_{}size时，它将如下所示：
+\begin{figure}[H]
+\center{\includegraphics[width=.5\textwidth]{40.png}}
+\label{fig:40}
+\caption{mini\_{}batch}
+\end{figure}
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{42.png}}
+\label{fig:42}
+\caption{mini-batch梯度下降算法}
+\end{figure}
+\subsubsection{Momentum}
+\subparagraph{}
+min-batch 梯度下降是在看过训练集的一部分子数据集之后,就开始了参数的更新,会在参数更新过程中出现偏差震荡。采用动量梯度下降法可以减缓震荡的出现。momentum 方式是在参
+数更新时候,参考历史的参数值,以平滑参数的更新。
+\subparagraph{}
+动量考虑过去的渐变以平滑更新。我们将把先前梯度的“方向”存储在变量$\nu$中。这将是以前步骤中梯度的指数加权平均值。也可以认为$\nu$是一个滚动下坡的球的“速度”,根据山坡的坡度/坡度的方向建立速度（和动量）。
+\subparagraph{}
+使梯度下降在纵轴的方向摆动小了，横轴的方向运动更快，加快优化。
+\subparagraph{}
+velocity值初始化:initialize\_{}velocity 在Python中是一个字典,初始为0矩阵,尺寸与 grads 一致,l=1,....,L
+\begin{minted}{python}
+v["dW" + str(l+1)] = ... #(numpy array of zeros with the same shape as parameters["W" + str(l+1)])
+v["db" + str(l+1)] = ... #(numpy array of zeros with the same shape as parameters["b" + str(l+1)])
+\end{minted}
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{45.png}}
+\label{fig:45}
+\caption{velocity值初始化}
+\end{figure}
+\subparagraph{}
+Implement the parameters update with momentum. The momentum update rule is, for l=1,...,L:
+\begin{figure}[H]
+\center{\includegraphics[width=.3\textwidth]{46.png}}
+\label{fig:6}
+\end{figure}
+\subparagraph{}
+其中L是层数，β是动量，α是学习率。所有参数应存储在参数字典中。
+\subparagraph{}
+注意，迭代器l在for循环中从0开始，而第一个参数是$W^{[1]}$和$b^{[1]}$（上标是“1”）。 所以你需要在编码时将l移到l+1。
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{47.png}}
+\label{fig:47}
+\caption{Momentum参数更新}
+\end{figure}
+\subsubsection{Adam}
+\subparagraph{}
+Adam is one of the most effective optimization algorithms for training neural networks. It combines ideas from RMSProp (described in lecture) and Momentum. 
+\subparagraph{}
+1.计算过去梯度的指数加权平均值，并将其存储在变量vv（偏差校正之前）和校正校正（偏置校正）中。
+\subparagraph{}
+2.计算过去梯度的平方的指数加权平均值，并将其存储在变量ss（偏差校正之前）和校正校正（偏置校正）之间。
+\subparagraph{}
+3.基于从“1”和“2”的组合信息在方向上更新参数。
+\begin{figure}[H]
+\center{\includegraphics[width=.4\textwidth]{48.png}}
+\label{fig:48}
+\caption{Adam规则}
+\end{figure}
+\subparagraph{}
+\begin{itemize}
+\item  t counts the number of steps taken of Adam
+\item L is the number of layers
+\item $\beta_1$ and $\beta_2$ are hyperparameters that control the two exponentially weighted averages.
+\item $\alpha$ is the learning rate
+\item ε is a very small number to avoid dividing by zero
+\end{itemize}
+\subparagraph{}
+The variables v,s are python dictionaries that need to be initialized with arrays of zeros. Their keys are the same as for grads, that is: for l=1,...,L:
+\begin{minted}{python}
+v["dW" + str(l+1)] = ... #(numpy array of zeros with the same shape as parameters["W" + str(l+1)])
+v["db" + str(l+1)] = ... #(numpy array of zeros with the same shape as parameters["b" + str(l+1)])
+s["dW" + str(l+1)] = ... #(numpy array of zeros with the same shape as parameters["W" + str(l+1)])
+s["db" + str(l+1)] = ... #(numpy array of zeros with the same shape as parameters["b" + str(l+1)])
+\end{minted}
+\begin{figure}[H]
+\center{\includegraphics[width=.6\textwidth]{51.png}}
+\label{fig:51}
+\caption{Adam参数初始化}
+\end{figure}
+\begin{figure}[H]
+\center{\includegraphics[width=.7\textwidth]{50.png}}
+\label{fig:50}
+\caption{Adam算法}
+\end{figure}
+\subparagraph{}
+总结：
+We have already implemented a 3-layer neural network. You will train it with: 
+\begin{itemize}
+\item Mini-batch Gradient Descent: it will call your function:
+\subparagraph{}
+  update\_{}parameters\_{}with\_{}gd()
+\item Mini-batch Momentum: it will call your functions:
+\subparagraph{}
+  initialize\_{}velocity() and update\_{}parameters\_{}with\_{}momentum()
+\item Mini-batch Adam: it will call your functions:
+\subparagraph{}
+  initialize\_{}adam() and update\_{}parameters\_{}with\_{}adam()
+\end{itemize}
+\begin{figure}[H]
+\center{\includegraphics[width=.4\textwidth]{55.png}}
+\label{fig:55}
+\caption{三种算法的对比}
+\end{figure}
+\section{Programming Frameworks}
+\subsection{Tensorflow}
+\end{CJK}
+\end{document}
